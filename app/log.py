@@ -2,6 +2,7 @@
 
 import json
 import logging
+import sys
 from contextvars import ContextVar
 from datetime import UTC, datetime
 
@@ -15,7 +16,8 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "logger": record.name,
             "msg": record.getMessage(),
-            "correlation_id": correlation_id_var.get(),
+            # extra wins: the relay logs many rows, each with its own correlation id, in one loop.
+            "correlation_id": getattr(record, "correlation_id", None) or correlation_id_var.get(),
             "order_id": getattr(record, "order_id", None),
         }
         if record.exc_info:
@@ -35,3 +37,9 @@ def configure_logging() -> None:
         logging.getLogger(name).handlers = []
         logging.getLogger(name).propagate = True
     logging.getLogger("uvicorn.access").disabled = True
+    # A crashing worker would otherwise print a plain-text traceback, the one non-JSON line.
+    sys.excepthook = _log_uncaught
+
+
+def _log_uncaught(exc_type, exc, tb) -> None:
+    logging.getLogger("app").critical("uncaught exception, exiting", exc_info=(exc_type, exc, tb))

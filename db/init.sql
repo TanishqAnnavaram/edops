@@ -29,6 +29,19 @@ CREATE TABLE IF NOT EXISTS outbox (
 CREATE INDEX IF NOT EXISTS outbox_unpublished_idx
     ON outbox (id) WHERE published_at IS NULL;
 
+-- Wakes the relay as soon as a row commits, so it does not have to poll on a short timer.
+-- NOTIFY is delivered at commit, never for a rolled-back insert.
+CREATE OR REPLACE FUNCTION notify_outbox() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM pg_notify('outbox', '');
+    RETURN NULL;
+END;
+$$;
+
+CREATE OR REPLACE TRIGGER outbox_notify
+    AFTER INSERT ON outbox
+    FOR EACH STATEMENT EXECUTE FUNCTION notify_outbox();
+
 -- DM-1: consumer dedupe. Inserted in the same transaction as the consumer's business write.
 CREATE TABLE IF NOT EXISTS processed_messages (
     consumer      TEXT NOT NULL,
@@ -47,6 +60,29 @@ CREATE TABLE IF NOT EXISTS payments (
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (order_id, kind)
 );
+
+-- A refund needs a charge for the same order, for at least the refunded amount. A trigger
+-- rather than a foreign key: an FK would need a refund_of column on every refund row.
+CREATE OR REPLACE FUNCTION check_refund_has_charge() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+    charged INTEGER;
+BEGIN
+    SELECT amount_cents INTO charged FROM payments WHERE order_id = NEW.order_id AND kind = 'charge';
+    IF charged IS NULL THEN
+        RAISE EXCEPTION 'refund for order % has no charge', NEW.order_id
+            USING ERRCODE = 'foreign_key_violation';
+    END IF;
+    IF NEW.amount_cents > charged THEN
+        RAISE EXCEPTION 'refund % exceeds charge % for order %', NEW.amount_cents, charged, NEW.order_id
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE TRIGGER payments_refund_has_charge
+    BEFORE INSERT ON payments
+    FOR EACH ROW WHEN (NEW.kind = 'refund') EXECUTE FUNCTION check_refund_has_charge();
 
 -- DM-5
 CREATE TABLE IF NOT EXISTS inventory (
@@ -70,8 +106,8 @@ CREATE TABLE IF NOT EXISTS reservations (
 CREATE TABLE IF NOT EXISTS saga_state (
     order_id    UUID PRIMARY KEY REFERENCES orders (id),
     step        TEXT NOT NULL CHECK (step IN (
-                    'PAYMENT_REQUESTED', 'STOCK_REQUESTED', 'REFUND_REQUESTED',
-                    'CONFIRMED', 'FAILED', 'COMPENSATED')),
+                    'PAYMENT_REQUESTED', 'STOCK_REQUESTED', 'RELEASE_REQUESTED',
+                    'REFUND_REQUESTED', 'CONFIRMED', 'FAILED', 'COMPENSATED')),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
