@@ -7,9 +7,12 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
+# init.sql ships in the image so `python -m app.init_db` can run as a pre-deploy step.
+COPY db/ ./db/
 
 RUN useradd --create-home --uid 1000 app
 USER app
 
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# One image for every process; compose and Railway override the command for the workers.
+CMD ["python", "-m", "app.serve"]
