@@ -99,6 +99,12 @@ def run(name: str, handler: Handler) -> None:
             try:
                 processed = process(conn, name, message, handler, log)
             except Exception:
+                if conn.broken:
+                    # A dead connection never heals, so every later message would fail too.
+                    # Exit and let the supervisor restart us with a fresh one; the unacked
+                    # message returns to the queue when our broker connection drops.
+                    log.critical("database connection lost, exiting")
+                    raise
                 # Requeue with no limit or backoff: a message that always fails loops forever.
                 # Dropping it instead would lose the order (INV-1). Retries/DLQ are deferred.
                 log.exception("failed %s, requeueing", message.event_type)
