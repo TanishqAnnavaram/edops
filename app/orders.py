@@ -113,7 +113,9 @@ def get_order(conn: psycopg.Connection, order_id: str) -> dict | None:
         # LEFT JOIN so an order missing its saga row shows saga_step null instead of a 404.
         cur.execute(
             """
-            SELECT o.id::text, o.customer_id, o.amount_cents, o.items, o.status, s.step
+            SELECT o.id::text, o.customer_id, o.amount_cents, o.items, o.status, s.step,
+                   (SELECT count(*) FROM payments p WHERE p.order_id = o.id AND p.kind = 'charge'),
+                   (SELECT count(*) FROM payments p WHERE p.order_id = o.id AND p.kind = 'refund')
             FROM orders o LEFT JOIN saga_state s ON s.order_id = o.id
             WHERE o.id = %s
             """,
@@ -122,5 +124,8 @@ def get_order(conn: psycopg.Connection, order_id: str) -> dict | None:
         row = cur.fetchone()
     if row is None:
         return None
-    keys = ("order_id", "customer_id", "amount_cents", "items", "status", "saga_step")
+    keys = (
+        "order_id", "customer_id", "amount_cents", "items", "status", "saga_step",
+        "charges", "refunds",
+    )
     return dict(zip(keys, row, strict=True))

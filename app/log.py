@@ -37,6 +37,8 @@ def configure_logging() -> None:
         logging.getLogger(name).handlers = []
         logging.getLogger(name).propagate = True
     logging.getLogger("uvicorn.access").disabled = True
+    # pika logs every connection state change at INFO, which buries the order lines.
+    logging.getLogger("pika").setLevel(logging.WARNING)
     # A crashing worker would otherwise print a plain-text traceback, the one non-JSON line.
     sys.excepthook = _log_uncaught
 

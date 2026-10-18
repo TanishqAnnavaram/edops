@@ -94,5 +94,13 @@ services:
       HEALTH_FILE: /tmp/health
     healthcheck: *heartbeat
 
+  orchestrator:
+    <<: *app
+    command: ["python", "-m", "app.orchestrator"]
+    environment:
+      <<: *app-env
+      HEALTH_FILE: /tmp/health
+    healthcheck: *heartbeat
+
 volumes:
   pgdata:
