@@ -1,16 +1,18 @@
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16.15
     environment:
-      POSTGRES_USER: edops
-      POSTGRES_PASSWORD: edops
-      POSTGRES_DB: edops
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
+      - pgdata:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U edops -d edops"]
+      # $$ defers expansion to the container's shell, which has POSTGRES_* set.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 3s
       timeout: 3s
       retries: 15
@@ -25,3 +27,28 @@ services:
       interval: 5s
       timeout: 5s
       retries: 15
+      start_period: 20s
+
+  order-api:
+    build: .
+    env_file: .env
+    environment:
+      # .env points at localhost for host-side tools; inside the network the host is "postgres".
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      # The slim image has no curl.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  pgdata:

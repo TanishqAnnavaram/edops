@@ -3,3 +3,10 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .venv/
+venv/
+.ruff_cache/
+
+# AI tooling (local only)
+CLAUDE.md
+.claude/
+docs/ai-log.md

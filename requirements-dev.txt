@@ -1,2 +1,4 @@
 -r requirements.txt
-ruff==0.8.*
+pytest==8.4.2
+httpx==0.27.2
+ruff==0.8.6

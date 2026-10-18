@@ -62,7 +62,8 @@ def test_sabotage_failure_after_order_insert_leaves_nothing(conn, monkeypatch):
         raise RuntimeError("simulated crash")
 
     monkeypatch.setattr(orders, "insert_outbox", boom)
-    with pytest.raises(RuntimeError):
+    # match: NotImplementedError subclasses RuntimeError; only the injected crash counts.
+    with pytest.raises(RuntimeError, match="simulated crash"):
         create_order(conn, "cust-1", 1999, "key-3")
 
     fresh = __import__("app.db", fromlist=["get_conn"]).get_conn()
