@@ -76,6 +76,7 @@ The test database does not need this; conftest rebuilds it every run.
 | Orchestrated saga, refund and release compensation, idempotent by state | Load test |
 | DB-level guards: one charge, one refund, refund needs a charge | Chaos tests beyond the one worker kill |
 | Deterministic failure injection | Saga timeouts, migrations, connection pool |
+| Workers exit and get restarted when their DB connection dies | Restarting hung (alive but stuck) workers |
 | JSON logs with order_id and correlation_id across every hop | Metrics and tracing (cut from scope) |
 | CI (ruff, pytest with real Postgres and RabbitMQ, image build) | |
 | Railway deploy config and smoke script | |
@@ -89,6 +90,15 @@ The test database does not need this; conftest rebuilds it every run.
 
 The full map is in docs/design.md section 7. Every invariant has a passing test. Not proven:
 an order whose message can never succeed stays PENDING forever (failure catalog F7).
+
+### Known gaps, shipped as is
+- **Endless requeue (F7, F10).** A message whose handler always fails is requeued immediately,
+  forever: no retry limit, no backoff, no dead-letter queue. Its order stays PENDING and the
+  worker spins. This is a deliberate, documented gap, not an oversight: dropping the message
+  instead would lose the order. Bounded retries and a DLQ are the first item of future work.
+- **Hung workers (F13).** A worker that is alive but stuck is detected (its heartbeat goes
+  stale and compose marks it unhealthy) but not restarted, and Railway has no healthcheck for
+  background workers. Listed as future work.
 
 ## Cost (honest)
 On Railway's Hobby plan, about **$10-15/month** for all seven services: $5 plan fee that covers
