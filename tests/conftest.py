@@ -9,7 +9,10 @@ from app.db import get_conn
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://edops:edops@localhost:5432/edops")
 
 # Rule: whenever a table is added to db/init.sql, add it here.
-TABLES = "outbox, orders"
+TABLES = "processed_messages, payments, reservations, saga_state, inventory, outbox, orders"
+
+# Same rows as the seed in db/init.sql; TRUNCATE wipes them, so every test re-seeds.
+INVENTORY_SEED = [("SKU-1", 10), ("SKU-2", 5), ("SKU-EMPTY", 0)]
 
 
 @pytest.fixture
@@ -24,6 +27,9 @@ def clean_tables():
         )
     with c:
         c.execute(f"TRUNCATE {TABLES} RESTART IDENTITY CASCADE")
+        c.cursor().executemany(
+            "INSERT INTO inventory (sku, stock) VALUES (%s, %s)", INVENTORY_SEED
+        )
 
 
 @pytest.fixture
