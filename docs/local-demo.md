@@ -218,6 +218,7 @@ file only runs when the volume is first created.
 | `Activate.ps1 cannot be loaded because running scripts is disabled` | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, then open a new terminal |
 | `error during connect ... dockerDesktopLinuxEngine` | Docker Desktop is not running; start it and wait until it is ready |
 | `pytest` exits with "Postgres unreachable" or "RabbitMQ unreachable" | The stack is not up: `docker compose up -d --wait` |
+| `ModuleNotFoundError: No module named 'app'` | A test file was run as `python tests/...py` (or with VS Code's **▷ Run Python File**). Run tests through pytest, which reads `pytest.ini`: `pytest tests/test_chaos.py -v` |
 | `ACCESS_REFUSED` in a worker log | `.env` RabbitMQ user/password changed after RabbitMQ was created: `docker compose up -d --force-recreate rabbitmq`, then restart the workers with `docker compose restart` |
 | Port 8000, 5432 or 5672 "already in use" | Another program (or a local Postgres/uvicorn) holds it; stop it, or stop the other copy of the stack |
 | An order stays `PENDING` | `docker compose ps`: every service must be healthy. Then check that service's log, e.g. `docker compose logs --tail 30 payment-worker` |

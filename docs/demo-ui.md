@@ -245,5 +245,6 @@ minute.
 | An order stays `PENDING` | Docker Desktop: is every container green? Then check that container's **Logs** |
 | The Testing panel shows no tests | Select the interpreter `C:\webdev\venvs\edops\Scripts\python.exe` (Ctrl+Shift+P → **Python: Select Interpreter**), then click the refresh icon in the Testing panel |
 | A test fails with "Postgres unreachable" | The stack is not running; start the **edops** group in Docker Desktop |
+| `ModuleNotFoundError: No module named 'app'` when running a test | The file was run with plain Python (VS Code's **▷ Run Python File** button, top right of the editor). Tests must run through pytest: use the Testing panel, the green ▷ next to the test function, or `pytest tests/test_chaos.py -v` |
 
 More fixes: [local-demo.md, Troubleshooting](local-demo.md#6-troubleshooting).

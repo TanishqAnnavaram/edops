@@ -46,7 +46,7 @@
       "say": "This test kills the payment worker at the worst possible moment: after it committed the charge but before it acknowledged the message. The broker redelivers, the new worker skips it as a duplicate, and the order still ends with exactly one charge. I also checked that it fails when the dedupe is broken, because a test that can't fail proves nothing."
     },
     {
-      "text": "GitHub Actions: the green CI run (same 46+ tests on Linux).",
+      "text": "GitHub Actions: open the latest green run, show the 'Initialize containers' step (real Postgres and RabbitMQ) and the 'Run pytest -v' step (every test PASSED).",
       "say": "The same tests run on every push in GitHub Actions, against real Postgres and RabbitMQ on Linux, so this isn't just working on my laptop."
     },
     {
