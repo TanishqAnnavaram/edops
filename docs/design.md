@@ -183,9 +183,16 @@ re-drives them.
   returns the original 201 rebuilt from the stored row; same key and a different hash returns
   409. Item order is part of the hash, so a retry that lists the same items in a different
   order gets 409 by design: a false conflict is safe, a false replay would not be.
-- **Hosting: Railway.** Runs all seven services in one project for roughly $10-15/month on
-  the Hobby plan (estimate). Render needs a paid $7 instance per background worker plus hosted
-  RabbitMQ, roughly $40-45/month.
+- **Hosting: not deployed; demonstrated locally (decided 2026-10-19).** The plan was Railway
+  (all seven services in one project, about $10-15/month on Hobby). Railway's free tier hit its
+  limits partway through setup, and a paid plan was out of scope. Postgres, RabbitMQ and
+  order-api did run there, and order-api's pre-deploy schema step worked, before the attempt
+  stopped. Rejected alternatives: Render free with Neon and CloudAMQP ($0, but all five
+  processes in one sleeping container, which blurs the per-process failure story) and a free
+  cloud VM (more operations work than the project is about). The CI run on real Postgres and
+  RabbitMQ is the off-machine proof instead. Cost of this choice: no live URL, so DEP-3
+  (push-to-deploy) and DEP-4 (demo on the live URL) are not met; DEP-4's check runs against
+  localhost instead.
 
 ## 5. Known future work
 Deferred on purpose; none of this is implemented.
@@ -194,6 +201,10 @@ Deferred on purpose; none of this is implemented.
   inspects and re-publishes them after a fix.
 - **Reconciliation job**: finds sagas in a non-terminal step past a deadline (F10, F14), and
   outbox rows unpublished for too long (F8), and alerts or re-drives them.
+- **Live deployment** (DEP-3, DEP-4): finish the Railway setup in docs/deploy.md on a paid
+  plan, or a $0 variant (one Render container running all processes under a launcher that
+  restarts any that exit, Neon Postgres, CloudAMQP). Either way, verify RabbitMQ over the
+  platform's private network and TLS URLs (`sslmode=require`, `amqps://`).
 - **Load test**: relay throughput (one confirm round-trip per message today), consumer lag.
 - **More chaos tests**: kill the relay mid-batch, restart RabbitMQ with messages in flight,
   restart Postgres during a saga.

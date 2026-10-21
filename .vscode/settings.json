@@ -1,3 +1,7 @@
 {
-    "python.terminal.useEnvFile": true
+    "python.terminal.useEnvFile": true,
+    "python.defaultInterpreterPath": "C:\\webdev\\venvs\\edops\\Scripts\\python.exe",
+    "python.testing.pytestEnabled": true,
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestArgs": ["tests"]
 }

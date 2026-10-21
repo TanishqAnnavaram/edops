@@ -29,6 +29,12 @@ records `(consumer, message_id)` in `processed_messages` in that same transactio
 commit. Details, the state machine and the failure catalog: [docs/design.md](docs/design.md).
 
 ## Run locally
+The system runs on one machine with Docker; it is not deployed anywhere (see "Deployment"
+below). The quickest demo is the dashboard at **http://localhost:8000/demo** once the stack is up:
+the whole script on one page ([docs/demo-ui.md](docs/demo-ui.md)). Also available: the same
+demo in PowerShell ([docs/local-demo.md](docs/local-demo.md)) or with the separate tools
+(Swagger, Adminer, RabbitMQ dashboard, Docker Desktop).
+
 Requires Python 3.12 and Docker Desktop. If PowerShell refuses to run the activate script, run
 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
 ```
@@ -42,7 +48,9 @@ pytest
 python scripts/smoke.py http://localhost:8000
 ```
 Compose runs postgres, rabbitmq, order-api, outbox-relay, payment-worker, inventory-worker and
-orchestrator. The API is at http://localhost:8000 and RabbitMQ's UI at http://localhost:15672.
+orchestrator, plus Adminer (a database UI, local only). The API is at http://localhost:8000
+(interactive docs at /docs), RabbitMQ's UI at http://localhost:15672 and Adminer at
+http://localhost:8080.
 
 Tests use their own database (`edops_test`, rebuilt from `db/init.sql` on every run) and a
 unique broker prefix per test, so they can run while the stack is up. A full run takes about a
@@ -78,8 +86,9 @@ The test database does not need this; conftest rebuilds it every run.
 | Deterministic failure injection | Saga timeouts, migrations, connection pool |
 | Workers exit and get restarted when their DB connection dies | Restarting hung (alive but stuck) workers |
 | JSON logs with order_id and correlation_id across every hop | Metrics and tracing (cut from scope) |
-| CI (ruff, pytest with real Postgres and RabbitMQ, image build) | |
-| Railway deploy config and smoke script | |
+| CI (ruff, pytest with real Postgres and RabbitMQ, image build) | Live deployment (DEP-3, DEP-4): see "Deployment" |
+| Smoke script (one charge for a replayed Idempotency-Key), run against localhost | |
+| Railway deploy config, prepared but never deployed | |
 
 ## Invariants and the tests that prove them
 | Invariant | Key tests |
@@ -100,12 +109,32 @@ an order whose message can never succeed stays PENDING forever (failure catalog 
   stale and compose marks it unhealthy) but not restarted, and Railway has no healthcheck for
   background workers. Listed as future work.
 
+## Deployment
+**Not deployed.** The project is demonstrated on a local machine, and there is no live URL.
+Railway's free tier would not run seven services (Postgres, RabbitMQ and five app processes),
+and a paid plan was out of scope for a portfolio project.
+
+What stands in for a live deployment:
+- **CI on GitHub Actions** runs ruff and the full suite, chaos test included, against real
+  Postgres and RabbitMQ containers on Linux for every push to `main`, then builds the image.
+  That is the externally checkable proof that the guarantees hold off this machine.
+- **The smoke script** (`scripts/smoke.py`) gives the DEP-4 result against localhost: one
+  order and exactly one charge for a replayed Idempotency-Key.
+
+Prepared but never run: [docs/deploy.md](docs/deploy.md) (Railway dashboard steps) and
+`.railway/railway.ts` (an unverified draft). Deploying would also need the changes listed in
+docs/design.md section 5.
+
 ## Cost (honest)
-On Railway's Hobby plan, about **$10-15/month** for all seven services: $5 plan fee that covers
-the first $5 of usage, with RAM about $10/GB-month and CPU about $20/vCPU-month after that.
-Five idle Python processes (about 100 MB each) plus Postgres and RabbitMQ come to roughly 1 GB.
-That is an estimate from published rates, not a bill; check the dashboard after a week. The same
-setup on Render is about $40-45/month because each background worker needs a paid instance.
+**$0** as built: everything runs locally in Docker, and CI runs on GitHub's free minutes.
+
+If it were deployed (estimates from published rates, never billed):
+- Railway Hobby, about **$10-15/month** for all seven services. The $5 plan fee covers the
+  first $5 of usage; after that RAM is about $10/GB-month and CPU about $20/vCPU-month. Five idle
+  Python processes (about 100 MB each) plus Postgres and RabbitMQ come to roughly 1 GB.
+- Render, about **$40-45/month**, because each background worker needs a paid instance.
+- **$0 is possible** with free tiers (Render web service, Neon Postgres, CloudAMQP RabbitMQ),
+  but only by running all five processes in one container that sleeps when idle.
 
 ## What changes at 100x
 - **Relay throughput** becomes the first wall: it waits for one broker confirm per message.
@@ -122,5 +151,5 @@ setup on Render is about $40-45/month because each background worker needs a pai
   worker. Bounded retries and a DLQ stop being optional, and so do metrics and alerting on queue
   depth, outbox lag and stuck sagas.
 - **RabbitMQ**: quorum queues on a cluster instead of one node's classic queues.
-- **Cost** moves from about $15 to a few hundred dollars a month, mostly for Postgres and
-  more replicas.
+- **Hosting** stops being optional: from $0 locally, through about $15/month for a single
+  deployed copy, to a few hundred dollars a month, mostly for Postgres and more replicas.

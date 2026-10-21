@@ -1,5 +1,12 @@
 # Deploying edops to Railway
 
+> **Status: prepared, not deployed.** edops is demonstrated locally ([local-demo.md](local-demo.md)).
+> These steps were followed on 2026-10-19 up to Step 3: Postgres, RabbitMQ and order-api ran on
+> Railway, and order-api's `/health` and pre-deploy schema step worked. The four background
+> services were never created because the free tier's limits were reached. Everything below the
+> order-api section is therefore untested. The reasoning is in docs/design.md section 4
+> (Hosting).
+
 Seven Railway services in one project: Postgres, RabbitMQ, and five app processes built from
 this repo's Dockerfile with different start commands. A push to `main` redeploys the app
 services (DEP-3).
@@ -39,9 +46,10 @@ Generate one RabbitMQ password, letters and digits only (it goes inside a URL un
 
 Railway sets `PORT` for order-api itself; `app.serve` reads it.
 
-**Never set** `FAULT_CRASH`, `FAULT_HANG`, `EDOPS_BROKER_PREFIX`, `HEALTH_FILE` or
-`TEST_DATABASE_URL` in any deployed service. The first two make processes exit or hang on
-purpose; they exist only for tests.
+**Never set** `DEMO_UI`, `FAULT_CRASH`, `FAULT_HANG`, `EDOPS_BROKER_PREFIX`, `HEALTH_FILE` or
+`TEST_DATABASE_URL` in any deployed service. `DEMO_UI` turns on the unauthenticated demo
+dashboard (the app refuses to start if it sees it next to `RAILWAY_ENVIRONMENT`); the fault
+variables make processes exit or hang on purpose and exist only for tests.
 
 The `fault-*` customer ids (`fault-payment-declined`, `fault-stock-rejected`,
 `fault-after-reserve`) work on the live URL by design, as a way to demo failure paths.

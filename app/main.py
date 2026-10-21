@@ -9,14 +9,18 @@ import psycopg
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app import demo
 from app.db import get_conn
 from app.log import configure_logging, correlation_id_var
 from app.orders import IdempotencyConflict, create_order, get_order
 
 configure_logging()
 log = logging.getLogger("app.api")
+# Fails at import, so uvicorn never starts serving with the demo endpoints on a hosted URL.
+demo.assert_safe_environment()
 
 app = FastAPI(title="edops order-api")
+app.include_router(demo.router)
 
 
 @app.middleware("http")
@@ -27,7 +31,10 @@ async def correlation_id(request: Request, call_next):
     try:
         response = await call_next(request)
         response.headers["X-Correlation-ID"] = cid
-        log.info(
+        # The dashboard polls every second; at INFO those lines would bury the order lines.
+        polling = request.method == "GET" and request.url.path.startswith("/demo/api/")
+        log.log(
+            logging.DEBUG if polling else logging.INFO,
             "%s %s %d %.1fms",
             request.method,
             request.url.path,

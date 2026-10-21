@@ -60,6 +60,11 @@ services:
 
   order-api:
     <<: *app
+    environment:
+      <<: *app-env
+      # Local demo dashboard at /demo. Never set on a hosted service (the app refuses to start
+      # if it sees a hosting platform's variables alongside it).
+      DEMO_UI: "1"
     ports:
       - "8000:8000"
     healthcheck:
@@ -101,6 +106,25 @@ services:
       <<: *app-env
       HEALTH_FILE: /tmp/health
     healthcheck: *heartbeat
+
+  # Browser UI for Postgres, for local demos only (docs/demo-ui.md). Bound to 127.0.0.1 so it is
+  # not reachable from other machines on the network.
+  adminer:
+    # 5.5.1, not 6.x: 6.1.1 prints PHP warnings on the page after login (seen 2026-10-20).
+    image: adminer:5.5.1
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://localhost:8080') === false ? 1 : 0);"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
 volumes:
   pgdata:

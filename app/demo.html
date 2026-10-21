@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>edops demo</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1c2330; --muted: #5d6676; --line: #dfe3ea;
+    --accent: #2457d6; --ok: #1d7f45; --bad: #b3261e; --warn: #9a6400; --code: #eef1f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --panel: #1a1f27; --text: #e6e9ef; --muted: #9aa3b2; --line: #2c3340;
+      --accent: #6d95ff; --ok: #4cc27f; --bad: #ff7b72; --warn: #e0a83a; --code: #232a35;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; justify-content: space-between;
+           padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { margin: 0; font-size: 17px; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  .live { font-size: 12px; color: var(--muted); }
+  .live b { color: var(--ok); }
+  main { display: grid; grid-template-columns: minmax(320px, 420px) 1fr; gap: 16px; padding: 16px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+            padding: 14px 16px; margin-bottom: 16px; }
+  h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em;
+       color: var(--muted); }
+  .step { border-top: 1px solid var(--line); padding: 10px 0; }
+  .step:first-of-type { border-top: 0; padding-top: 0; }
+  .step-head { display: flex; align-items: center; gap: 8px; }
+  .num { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--accent);
+         color: #fff; font-size: 12px; display: grid; place-items: center; font-weight: 600; }
+  .step-title { font-weight: 600; flex: 1; }
+  button { font: inherit; border: 1px solid var(--accent); background: var(--accent); color: #fff;
+           border-radius: 6px; padding: 4px 12px; cursor: pointer; }
+  button.secondary { background: transparent; color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  .expect { color: var(--muted); margin: 6px 0 0 30px; }
+  .say { margin: 6px 0 0 30px; padding: 6px 10px; border-left: 3px solid var(--accent);
+         background: var(--code); border-radius: 0 6px 6px 0; }
+  .say.empty { border-left-color: var(--warn); color: var(--warn); font-style: italic; }
+  .result { margin: 6px 0 0 30px; font-weight: 600; }
+  .variants { margin: 6px 0 0 30px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .check { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; }
+  .check input { margin-top: 3px; }
+  .check .say { margin-left: 0; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--code); }
+  tr.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .num-cell { text-align: right; font-variant-numeric: tabular-nums; }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12.5px; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px;
+          font-weight: 600; background: var(--code); }
+  .pill.CONFIRMED { color: var(--ok); } .pill.FAILED { color: var(--bad); }
+  .pill.PENDING { color: var(--warn); }
+  .current { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; }
+  .current dt { color: var(--muted); } .current dd { margin: 0; overflow-wrap: anywhere; }
+  pre { margin: 0; padding: 10px; background: var(--code); border-radius: 6px; overflow-x: auto;
+        font-size: 12.5px; max-height: 180px; }
+  .stock { display: flex; gap: 18px; flex-wrap: wrap; }
+  .stock div { font-variant-numeric: tabular-nums; }
+  .muted { color: var(--muted); }
+  .proof { margin-top: 10px; padding: 10px 12px; border-radius: 6px; background: var(--code); }
+  .proof .ok { color: var(--ok); font-weight: 600; } .proof .wait { color: var(--warn); }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>edops demo</h1>
+    <div class="sub">Outbox, idempotent consumers and an orchestrated saga, running locally</div>
+  </div>
+  <div class="live" id="live">refresh: <b>live</b></div>
+</header>
+
+<main>
+  <div>
+    <section>
+      <h2>Demo script</h2>
+      <div id="steps"></div>
+    </section>
+    <section>
+      <h2>Off this page</h2>
+      <div id="checklist"></div>
+    </section>
+  </div>
+
+  <div>
+    <section>
+      <h2>Current request</h2>
+      <dl class="current">
+        <dt>Idempotency key</dt><dd class="mono" id="cur-key">none yet, run step 1</dd>
+        <dt>Order id</dt><dd class="mono" id="cur-order">none</dd>
+        <dt>Body</dt><dd class="mono" id="cur-body">none</dd>
+      </dl>
+      <div id="proof"></div>
+    </section>
+
+    <section>
+      <h2>Recent orders <span class="muted">(click one to see its timeline)</span></h2>
+      <table>
+        <thead><tr><th>Customer</th><th>Key</th><th>Status</th><th>Saga step</th>
+          <th class="num-cell">Charges</th><th class="num-cell">Refunds</th></tr></thead>
+        <tbody id="orders"><tr><td colspan="6" class="muted">No orders yet</td></tr></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Timeline <span class="muted" id="tl-label"></span></h2>
+      <table>
+        <thead><tr><th>Event</th><th>Written</th><th>Published</th><th>Processed by</th></tr></thead>
+        <tbody id="timeline"><tr><td colspan="4" class="muted">Select an order</td></tr></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Stock</h2>
+      <div class="stock" id="stock"></div>
+    </section>
+
+    <section>
+      <h2>Last response</h2>
+      <pre id="last">nothing sent yet</pre>
+    </section>
+  </div>
+</main>
+
+<script>
+const NORMAL = { customer_id: "c-demo", amount_cents: 1999, items: [{ sku: "SKU-1", quantity: 1 }] };
+const FAILURES = {
+  compensate: { customer_id: "fault-after-reserve", amount_cents: 1999, items: [{ sku: "SKU-2", quantity: 1 }] },
+  declined: { customer_id: "fault-payment-declined", amount_cents: 1999, items: [{ sku: "SKU-1", quantity: 1 }] },
+  rejected: { customer_id: "fault-stock-rejected", amount_cents: 1999, items: [{ sku: "SKU-1", quantity: 1 }] },
+};
+
+// What step 1 sent: steps 2 and 3 must reuse its key, or they would not show what they claim.
+const current = { key: null, body: null, orderId: null };
+let selectedId = null;
+let redelivery = null;   // { orderId, messageId, requestedAt, chargesBefore }
+let proofEvents = [];    // last timeline seen for the redelivered order, kept while others are selected
+let lastState = { orders: [], stock: [] };
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+const newKey = () => "demo-" + Math.random().toString(36).slice(2, 10);
+const time = (iso) => iso ? new Date(iso).toLocaleTimeString([], { hour12: false }) + "." +
+  String(new Date(iso).getMilliseconds()).padStart(3, "0") : "";
+
+async function api(path, options) {
+  const response = await fetch(path, options);
+  const text = await response.text();
+  let body;
+  try { body = JSON.parse(text); } catch { body = text; }
+  return { status: response.status, body };
+}
+
+function showResponse(label, r) {
+  $("last").textContent = `${label}\nHTTP ${r.status}\n${JSON.stringify(r.body, null, 2)}`;
+}
+
+function setResult(stepId, text, good) {
+  const node = $("result-" + stepId);
+  node.textContent = text;
+  node.style.color = good ? "var(--ok)" : "var(--bad)";
+}
+
+async function postOrder(key, body) {
+  return api("/orders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": key },
+    body: JSON.stringify(body),
+  });
+}
+
+function setCurrent(key, body, orderId) {
+  Object.assign(current, { key, body, orderId });
+  $("cur-key").textContent = key;
+  $("cur-order").textContent = orderId || "none";
+  $("cur-body").textContent = JSON.stringify(body);
+  updateButtons();
+}
+
+const actions = {
+  async place() {
+    const key = newKey();
+    const r = await postOrder(key, NORMAL);
+    showResponse(`POST /orders  Idempotency-Key: ${key}`, r);
+    if (r.status === 201) {
+      setCurrent(key, NORMAL, r.body.order_id);
+      select(r.body.order_id);
+      redelivery = null;
+      proofEvents = [];
+      setResult("place", `201, order ${r.body.order_id.slice(0, 8)}…`, true);
+    } else setResult("place", `Unexpected HTTP ${r.status}`, false);
+  },
+  async again() {
+    const r = await postOrder(current.key, current.body);
+    showResponse(`POST /orders  Idempotency-Key: ${current.key}  (same key, same body)`, r);
+    const same = r.status === 201 && r.body.order_id === current.orderId;
+    setResult("again", same ? "201, same order id as step 1" : `HTTP ${r.status}: not a replay`, same);
+  },
+  async conflict() {
+    const body = { ...current.body, amount_cents: current.body.amount_cents + 3001 };
+    const r = await postOrder(current.key, body);
+    showResponse(`POST /orders  Idempotency-Key: ${current.key}  (same key, different body)`, r);
+    setResult("conflict", r.status === 409 ? "409, nothing written" : `HTTP ${r.status}`, r.status === 409);
+  },
+  async redeliver() {
+    const order = lastState.orders.find((o) => o.order_id === current.orderId);
+    const chargesBefore = order ? order.charges : null;
+    const r = await api(`/demo/api/orders/${current.orderId}/redeliver`, { method: "POST" });
+    showResponse(`POST /demo/api/orders/${current.orderId}/redeliver`, r);
+    if (r.status !== 200) { setResult("redeliver", `HTTP ${r.status}`, false); return; }
+    redelivery = { orderId: current.orderId, messageId: r.body.message_id,
+                   requestedAt: r.body.requested_at, chargesBefore };
+    proofEvents = [];
+    select(current.orderId);
+    setResult("redeliver", "Sent: watch the proof under Current request", true);
+  },
+  async compensate() { await failure("compensate"); },
+};
+
+async function failure(kind) {
+  const key = newKey();
+  const r = await postOrder(key, FAILURES[kind]);
+  showResponse(`POST /orders  Idempotency-Key: ${key}  (${FAILURES[kind].customer_id})`, r);
+  if (r.status === 201) {
+    select(r.body.order_id);
+    setResult("compensate", `201: ${FAILURES[kind].customer_id}, watch it settle`, true);
+  } else setResult("compensate", `HTTP ${r.status}`, false);
+}
+
+function updateButtons() {
+  for (const id of ["again", "conflict", "redeliver"]) {
+    const button = $("btn-" + id);
+    if (button) button.disabled = !current.key;
+  }
+}
+
+function renderScript(script) {
+  const steps = $("steps");
+  script.steps.forEach((step, i) => {
+    const box = el("div", "step");
+    const head = el("div", "step-head");
+    head.append(el("span", "num", String(i + 1)), el("span", "step-title", step.title));
+    const button = el("button", "", "Run");
+    button.id = "btn-" + step.id;
+    button.onclick = () => actions[step.id]().catch((e) => setResult(step.id, String(e), false));
+    head.append(button);
+    box.append(head, el("div", "expect", step.expect));
+    if (step.id === "compensate") {
+      const variants = el("div", "variants");
+      for (const [kind, label] of [["declined", "Payment declined"], ["rejected", "Stock rejected"]]) {
+        const b = el("button", "secondary", label);
+        b.onclick = () => failure(kind);
+        variants.append(b);
+      }
+      box.append(variants);
+    }
+    box.append(sayBox(step.say), el("div", "result"));
+    box.lastChild.id = "result-" + step.id;
+    steps.append(box);
+  });
+
+  const checklist = $("checklist");
+  script.checklist.forEach((item, i) => {
+    const row = el("label", "check");
+    const box = el("input");
+    box.type = "checkbox";
+    const storageKey = "edops-check-" + i;
+    try { box.checked = localStorage.getItem(storageKey) === "1"; } catch {}
+    box.onchange = () => { try { localStorage.setItem(storageKey, box.checked ? "1" : "0"); } catch {} };
+    const text = el("div");
+    text.append(el("div", "", item.text), sayBox(item.say));
+    row.append(box, text);
+    checklist.append(row);
+  });
+  const reset = el("button", "secondary", "Clear ticks");
+  reset.onclick = () => {
+    checklist.querySelectorAll("input").forEach((b, i) => {
+      b.checked = false;
+      try { localStorage.removeItem("edops-check-" + i); } catch {}
+    });
+  };
+  checklist.append(reset);
+  updateButtons();
+}
+
+function sayBox(text) {
+  return text ? el("div", "say", text)
+              : el("div", "say empty", "Your line goes here: fill in \"say\" in app/demo_script.json");
+}
+
+function select(orderId) {
+  selectedId = orderId;
+  refresh();
+}
+
+function renderOrders(orders) {
+  const body = $("orders");
+  body.replaceChildren();
+  if (!orders.length) {
+    const row = el("tr"); const cell = el("td", "muted", "No orders yet"); cell.colSpan = 6;
+    row.append(cell); body.append(row); return;
+  }
+  for (const o of orders) {
+    const row = el("tr", o.order_id === selectedId ? "selected" : "");
+    row.onclick = () => select(o.order_id);
+    const status = el("td"); status.append(el("span", "pill " + o.status, o.status));
+    row.append(el("td", "", o.customer_id), el("td", "mono", o.idempotency_key), status,
+               el("td", "", o.saga_step), el("td", "num-cell", o.charges), el("td", "num-cell", o.refunds));
+    body.append(row);
+  }
+}
+
+function renderTimeline(events) {
+  const body = $("timeline");
+  body.replaceChildren();
+  for (const e of events) {
+    const row = el("tr");
+    row.append(el("td", "", e.event_type), el("td", "mono", time(e.created_at)),
+               el("td", "mono", e.published_at ? time(e.published_at) : "waiting for relay"),
+               el("td", "", e.processed_by || "not yet"));
+    body.append(row);
+  }
+}
+
+function renderProof(events) {
+  const proof = $("proof");
+  if (!redelivery) { proof.replaceChildren(); return; }
+  const order = lastState.orders.find((o) => o.order_id === redelivery.orderId);
+  const created = events.find((e) => e.event_type === "OrderCreated");
+  const republished = created && created.published_at &&
+    new Date(created.published_at) > new Date(redelivery.requestedAt);
+  const box = el("div", "proof");
+  box.append(el("div", "", `Redelivery of message ${redelivery.messageId.slice(0, 8)}… ` +
+                           `requested at ${time(redelivery.requestedAt)}`));
+  box.append(republished
+    ? el("div", "ok", `Re-published by the relay at ${time(created.published_at)}, same message id`)
+    : el("div", "wait", "Waiting for relay to re-publish…"));
+  if (order) {
+    const steady = order.charges === redelivery.chargesBefore;
+    box.append(el("div", steady ? "ok" : "",
+      `Charges: ${redelivery.chargesBefore} before, ${order.charges} now` +
+      (republished && steady ? "  (duplicate skipped)" : "")));
+  }
+  proof.replaceChildren(box);
+}
+
+let timer = null;
+async function refresh() {
+  clearTimeout(timer);
+  try {
+    const state = await api("/demo/api/state");
+    if (state.status === 200) {
+      lastState = state.body;
+      renderOrders(lastState.orders);
+      $("stock").replaceChildren(...lastState.stock.map((s) => {
+        const d = el("div"); d.append(el("span", "mono", s.sku + " "), el("b", "", s.stock)); return d;
+      }));
+    }
+    if (selectedId) {
+      const tl = await api(`/demo/api/orders/${selectedId}/timeline`);
+      if (tl.status === 200) {
+        $("tl-label").textContent = "order " + selectedId.slice(0, 8) + "…";
+        renderTimeline(tl.body);
+        if (redelivery && redelivery.orderId === selectedId) proofEvents = tl.body;
+      }
+    }
+    renderProof(proofEvents);
+    $("live").innerHTML = "refresh: <b>live</b>";
+  } catch (e) {
+    $("live").textContent = "refresh: cannot reach the API (is the stack running?)";
+  }
+  // Polling stops while the tab is hidden and resumes when it is shown again.
+  if (!document.hidden) timer = setTimeout(refresh, 1000);
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+
+api("/demo/api/script").then((r) => { renderScript(r.body); refresh(); });
+</script>
+</body>
+</html>

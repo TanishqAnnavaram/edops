@@ -1,0 +1,57 @@
+{
+  "_note": "Draft lines: reword them so they sound like you. The page shows each \"say\" under its step; reload the page after editing (rebuild the API container to pick up changes).",
+  "steps": [
+    {
+      "id": "place",
+      "title": "Place an order",
+      "expect": "201 with a new order_id and a new idempotency key (shown above). Within a second the order reaches CONFIRMED with 1 charge.",
+      "say": "This is a normal order. The API saves the order and its OrderCreated event in one database transaction, so there can never be an order without the event that moves it forward. Everything after this happens asynchronously through RabbitMQ."
+    },
+    {
+      "id": "again",
+      "title": "Send the same request again",
+      "expect": "201 and the same order_id as step 1: the key is replayed, not re-run. Still one order and one charge.",
+      "say": "Clients retry when a request times out. Because the retry carries the same Idempotency-Key, the API hands back the original order instead of creating a new one, so a retry can never turn into a second charge."
+    },
+    {
+      "id": "conflict",
+      "title": "Same key, different body",
+      "expect": "409: the key is already bound to a different request body. Nothing is written.",
+      "say": "Same key with a different body isn't a retry, it's a client bug. I return 409 and write nothing, rather than guessing which request the client meant."
+    },
+    {
+      "id": "redeliver",
+      "title": "The broker redelivers",
+      "expect": "OrderCreated is published again with the same message id. The payment worker recognises the id and skips it: charges stay at 1. The 'duplicate OrderCreated skipped' log line is in Docker Desktop, payment-worker, Logs.",
+      "say": "This is the core question: what if the broker delivers the same message twice, for example after a worker crashed before acknowledging it? The worker records each message id in the same transaction as the charge and only acknowledges after commit, so the second copy finds its id and is skipped. Underneath that, a unique constraint makes a second charge impossible in the database itself."
+    },
+    {
+      "id": "compensate",
+      "title": "Failure after stock was reserved",
+      "expect": "Ends FAILED / COMPENSATED with 1 charge and 1 refund. SKU-2 stock dips and comes back. The timeline shows ReleaseStock, then RefundPayment.",
+      "say": "Here the payment went through and stock was reserved, and then a later check rejected the order. The orchestrator undoes the work in order: it releases the stock, then refunds the payment, each exactly once. The order ends FAILED, the money comes back, and the stock is back on the shelf."
+    }
+  ],
+  "checklist": [
+    {
+      "text": "Docker Desktop: stop payment-worker, run step 1, see it wait at PENDING, start the worker, see CONFIRMED.",
+      "say": "If a worker is down, nothing is lost. The event is already saved, and the message waits in the queue until a worker acknowledges it after committing. When I start the worker again, the order finishes on its own."
+    },
+    {
+      "text": "Docker Desktop: restart postgres, run step 1, it still reaches CONFIRMED.",
+      "say": "When the database restarts, the workers notice their connection died and exit on purpose, so Docker restarts them with a fresh one. I found this while writing the failure catalog: before the fix, they retried one message about 1,200 times a second forever, while still reporting healthy."
+    },
+    {
+      "text": "VS Code Testing panel: run tests/test_chaos.py (kills a worker between commit and ack).",
+      "say": "This test kills the payment worker at the worst possible moment: after it committed the charge but before it acknowledged the message. The broker redelivers, the new worker skips it as a duplicate, and the order still ends with exactly one charge. I also checked that it fails when the dedupe is broken, because a test that can't fail proves nothing."
+    },
+    {
+      "text": "GitHub Actions: the green CI run (same 46+ tests on Linux).",
+      "say": "The same tests run on every push in GitHub Actions, against real Postgres and RabbitMQ on Linux, so this isn't just working on my laptop."
+    },
+    {
+      "text": "docs/design.md: failure catalog (the 'handled badly' rows) and the invariant-to-test map.",
+      "say": "I also wrote down what it doesn't handle. The biggest gap: a message that always fails is retried forever, with no backoff and no dead-letter queue. That's marked as handled badly, and it's the first thing I'd build next."
+    }
+  ]
+}

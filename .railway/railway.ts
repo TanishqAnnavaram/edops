@@ -1,6 +1,7 @@
 // Railway Infrastructure as Code for edops. DRAFT: written from docs.railway.com's IaC reference
 // without an account, so it has never been run through `railway config plan`. Run plan first
 // and fix anything it rejects; docs/deploy.md has the equivalent dashboard steps.
+// edops is not deployed (docs/design.md section 4, Hosting); this file is kept for future work.
 //
 // Never set FAULT_CRASH or FAULT_HANG here: they make processes exit or hang on purpose.
 // Secrets use preserve(): their values are set once in the Railway dashboard, never in git.

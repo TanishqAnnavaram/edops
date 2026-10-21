@@ -29,6 +29,11 @@ CREATE TABLE IF NOT EXISTS outbox (
 CREATE INDEX IF NOT EXISTS outbox_unpublished_idx
     ON outbox (id) WHERE published_at IS NULL;
 
+-- Lookups by order (the demo dashboard polls these every second) and by message id (the join
+-- from outbox to processed_messages, whose primary key leads with consumer, not message_id).
+CREATE INDEX IF NOT EXISTS outbox_aggregate_idx ON outbox (aggregate_id);
+CREATE INDEX IF NOT EXISTS orders_created_at_idx ON orders (created_at DESC);
+
 -- Wakes the relay as soon as a row commits, so it does not have to poll on a short timer.
 -- NOTIFY is delivered at commit, never for a rolled-back insert.
 CREATE OR REPLACE FUNCTION notify_outbox() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -49,6 +54,8 @@ CREATE TABLE IF NOT EXISTS processed_messages (
     processed_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (consumer, message_id)
 );
+
+CREATE INDEX IF NOT EXISTS processed_messages_message_idx ON processed_messages (message_id);
 
 -- DM-2: at most one charge and one refund per order, so net charges per order are <= 1
 -- even if dedupe above this layer fails (INV-2).
